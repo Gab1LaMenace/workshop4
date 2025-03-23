@@ -1,9 +1,6 @@
 import bodyParser from "body-parser";
-import express, { Request, Response } from "express";
+import express from "express";
 import { REGISTRY_PORT } from "../config";
-
-// In-memory storage for registered nodes
-let nodesRegistry: { nodeId: number; pubKey: string }[] = [];
 
 export type Node = { nodeId: number; pubKey: string };
 
@@ -21,33 +18,35 @@ export async function launchRegistry() {
   _registry.use(express.json());
   _registry.use(bodyParser.json());
 
-  // Route to get all registered nodes
-  _registry.get("/getNodes", (req: Request, res: Response) => {
-    res.json({ nodes: nodesRegistry });
-  });
-
-  _registry.post("/registerNode", (req: Request, res: Response) => {
-    const { nodeId, pubKey }: RegisterNodeBody = req.body;
-  
-    // Check if the node is already registered
-    const existingNode = nodesRegistry.find((node) => node.nodeId === nodeId);
-    if (existingNode) {
-      // If the node is already registered, return a response
-      return res.status(400).json({ error: "Node already registered" });
-    }
-  
-    // Register the new node
-    nodesRegistry.push({ nodeId, pubKey });
-    console.log(`Node ${nodeId} registered successfully`);
-  
-    // Respond with a success message after registering the node
-    return res.status(200).json({ message: "Node registered successfully" });
-  });
-  
+  // Store registered nodes
+  const nodes: Node[] = [];
 
   // Status route
   _registry.get("/status", (req, res) => {
-    res.json({ result: "live" });
+    res.send("live");
+  });
+
+  // Route for nodes to register themselves
+  _registry.post("/registerNode", (req, res) => {
+    const { nodeId, pubKey } = req.body as RegisterNodeBody;
+    
+    // Check if node with this ID already exists
+    const existingNodeIndex = nodes.findIndex(node => node.nodeId === nodeId);
+    
+    if (existingNodeIndex !== -1) {
+      // Update existing node
+      nodes[existingNodeIndex] = { nodeId, pubKey };
+    } else {
+      // Add new node
+      nodes.push({ nodeId, pubKey });
+    }
+    
+    res.status(200).send("success");
+  });
+
+  // Route for users to get the registry
+  _registry.get("/getNodeRegistry", (req, res) => {
+    res.json({ nodes });
   });
 
   const server = _registry.listen(REGISTRY_PORT, () => {
